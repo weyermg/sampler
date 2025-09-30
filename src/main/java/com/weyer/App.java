@@ -17,6 +17,7 @@ public class App {
     public static final int QUAL_SCALE = 1;
     public static final int ROW_RES = 10 * QUAL_SCALE;
     public static final int COL_RES = 20 * QUAL_SCALE;
+    public static final int BINS = 5;
     public static final ArrayList<Color> BASE_COLORS = createBaseColList();
 
     private static ArrayList<Color> createBaseColList() {
@@ -58,10 +59,12 @@ public class App {
         File dir = new File("images");
         ArrayList<String> rows = new ArrayList<String>();
         for (File f : dir.listFiles()) {
-            // Color[][] pic = superSample(f, BASE_COLORS);
-            Color[][] samp = sample(f, BASE_COLORS);
+            Color[][] pic = superSample(f);
+            Color[][] samp = sample(f);
+            pic = reduce(pic, BASE_COLORS);
+            samp = reduce(samp, BASE_COLORS);
             // new Pic(pic);
-            String data = toColorWiseData(samp);
+            String data = toCategoricalData(samp);
             rows.add(data);
         }
 
@@ -111,7 +114,49 @@ public class App {
         return sb.toString() + "\n";
     }
 
+    private static String toGrayData(Color[][] sample) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < ROW_RES; i++) {
+            for (int j = 0; j < COL_RES; j++) {
+                sb.append(sample[i][j].getRed() + ",");
+            }
+        }
+        sb.deleteCharAt(sb.length() - 1);
+        return sb.toString() + "\n";
+    }
+
     private static String toColorWiseData(Color[][] sample) {
+        int[] counts = getCounts(sample);
+        return toLabel(counts) + "," + counts[0] + "," + counts[1] + "," + counts[2] + "," + counts[3] + "\n";
+    }
+
+    private static String toCategoricalData(Color[][] sample) {
+        int[] counts = getCounts(sample);
+        int maxVal = sample.length * sample[0].length;
+        return toLabel(counts) + "," + bin(counts[0], BINS, maxVal) + "," + bin(counts[1], BINS, maxVal) + ","
+                + bin(counts[2], BINS, maxVal) + "," + bin(counts[3], BINS, maxVal) + "\n";
+    }
+
+    private static int bin(int freq, int bins, int maxVal) {
+        int[] cutoffs = new int[bins - 1];
+        double cut = (double) maxVal / 2.0;
+        for (int i = bins - 2; i >= 0; i--) {
+            cutoffs[i] = (int) cut;
+            cut = cut / 2.0;
+        }
+        return findInCuts(cutoffs, freq);
+    }
+
+    private static int findInCuts(int[] cutoffs, int toBin) {
+        for (int i = 0; i < cutoffs.length; i++) {
+            if (toBin < cutoffs[i]) {
+                return i;
+            }
+        }
+        return cutoffs.length;
+    }
+
+    private static int[] getCounts(Color[][] sample) {
         int[] counts = new int[4];
         for (int i = 0; i < ROW_RES; i++) {
             for (int j = 0; j < COL_RES; j++) {
@@ -119,7 +164,7 @@ public class App {
                 counts[colInd]++;
             }
         }
-        return toLabel(counts) + "," + counts[0] + "," + counts[1] + "," + counts[2] + "," + counts[3] + "\n";
+        return counts;
     }
 
     private static String toLabel(int[] counts) {
@@ -179,7 +224,24 @@ public class App {
         return 3;
     }
 
-    private static Color[][] sample(File f, ArrayList<Color> colorList) {
+    private static Color[][] grayscale(Color[][] colors) {
+        for (int i = 0; i < colors.length; i++) {
+            for (int j = 0; j < colors[0].length; j++) {
+                colors[i][j] = grayscale(colors[i][j]);
+            }
+        }
+        return colors;
+    }
+
+    private static Color grayscale(Color color) {
+        int r = color.getRed();
+        int g = color.getGreen();
+        int b = color.getBlue();
+        int gray = (int) (.2126 * (double) r + .7152 * (double) g + .0722 * (double) b);
+        return new Color(gray, gray, gray);
+    }
+
+    private static Color[][] sample(File f) {
         BufferedImage buffImg;
         try {
             buffImg = ImageIO.read(f);
@@ -196,14 +258,13 @@ public class App {
         for (int i = 0; i < ROW_RES; i++) {
             for (int j = 0; j < COL_RES; j++) {
                 rgb = new Color(buffImg.getRGB(j * widthInc, i * heightInc));
-                rgb = reduce(rgb, colorList);
                 colors[i][j] = rgb;
             }
         }
         return colors;
     }
 
-    private static Color[][] superSample(File f, ArrayList<Color> colorList) {
+    private static Color[][] superSample(File f) {
         BufferedImage buffImg;
         try {
             buffImg = ImageIO.read(f);
@@ -220,7 +281,16 @@ public class App {
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
                 rgb = new Color(buffImg.getRGB(j * widthInc, i * heightInc));
-                rgb = reduce(rgb, colorList);
+                colors[i][j] = rgb;
+            }
+        }
+        return colors;
+    }
+
+    private static Color[][] reduce(Color[][] colors, ArrayList<Color> colList) {
+        for (int i = 0; i < colors.length; i++) {
+            for (int j = 0; j < colors[0].length; j++) {
+                Color rgb = reduce(colors[i][j], colList);
                 colors[i][j] = rgb;
             }
         }
